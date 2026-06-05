@@ -1,0 +1,337 @@
+package gost28147cntparity
+
+import (
+	"bytes"
+	. "github.com/bigbes/gostcrypto/gost28147cnt"
+	"math/rand"
+	"os"
+	"os/exec"
+	"runtime"
+	"testing"
+
+	gost "github.com/bigbes/gostcrypto-compat"
+	"github.com/bigbes/gostcrypto/gost28147"
+)
+
+// The gostcryptocompat.NewGOST28147_CNT oracle returns gogost's raw
+// *gost28147.CTR. Per the guide's delta D4 it has two streaming defects that
+// also make it an UNRELIABLE differential reference for arbitrary key/IV:
+//
+//   - it performs no CryptoPro key meshing, so it diverges from ground truth
+//     at the 1024-byte boundary (TestDiff_OracleLacksMeshing); and
+//   - it applies the end-around carry to the whole counter half differently
+//     from the engine, so for many non-zero IVs it diverges from the engine
+//     well before 1024 bytes (the very first time a counter half wraps).
+//
+// The guide only guarantees the oracle as a reference for the pinned
+// zero-key/zero-IV case below 1024 bytes. For random key/IV the authoritative
+// ground truth is the gost-engine CLI (CLAUDE.md "CLI oracles"). So:
+//
+//   - TestDiff_GostEngineCLI is the real random-input differential, against
+//     the engine, for BOTH S-boxes, including split (non-block-aligned)
+//     streaming — this is the critical case.
+//   - TestDiff_InternalGostOracle keeps the requested gogost-oracle diff but
+//     restricted to the zero-IV, meshing-free regime where it is valid.
+//   - TestDiff_OracleLacksMeshing locks in why the oracle cannot go past 1024.
+
+const oracleMeshingFreeLimit = 1024
+
+// opensslBin resolves the openssl CLI used as the gost-engine ground-truth
+// oracle. OPENSSL_BIN, when set, wins outright; otherwise per-OS well-known
+// paths are probed (Homebrew/MacPorts on macOS, the usual prefixes on Linux),
+// falling back to a bare "openssl" looked up on PATH (covers any distro or
+// custom install). Returns ok=false if none is found so the caller can skip.
+func opensslBin() (string, bool) {
+	if v := os.Getenv("OPENSSL_BIN"); v != "" {
+		if _, err := os.Stat(v); err == nil {
+			return v, true
+		}
+		return "", false
+	}
+	for _, p := range opensslBinCandidates() {
+		if _, err := os.Stat(p); err == nil {
+			return p, true
+		}
+	}
+	// Fall back to PATH (covers any distro or custom install).
+	if p, err := exec.LookPath("openssl"); err == nil {
+		return p, true
+	}
+	return "", false
+}
+
+func opensslBinCandidates() []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{
+			"/opt/homebrew/opt/openssl@3/bin/openssl", // Homebrew (Apple Silicon)
+			"/usr/local/opt/openssl@3/bin/openssl",    // Homebrew (Intel)
+			"/opt/local/bin/openssl",                  // MacPorts
+		}
+	case "linux":
+		return []string{
+			"/usr/bin/openssl",
+			"/usr/local/bin/openssl",
+			"/usr/local/ssl/bin/openssl", // source-build default prefix
+		}
+	default:
+		return nil
+	}
+}
+
+// gostEngineConf resolves the OpenSSL config that registers the gost engine,
+// passed to the CLI via OPENSSL_CONF. An OPENSSL_CONF already set in the
+// environment wins outright; otherwise per-OS well-known configs are probed.
+// Returns "" when none is found, in which case the caller relies on the
+// ambient OpenSSL config (the typical Linux case, where distro packages
+// register the engine in the system openssl.cnf).
+func gostEngineConf() string {
+	if v := os.Getenv("OPENSSL_CONF"); v != "" {
+		return v
+	}
+	for _, p := range gostEngineConfCandidates() {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func gostEngineConfCandidates() []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{
+			"/opt/homebrew/etc/gost/gost-engine.cnf", // Homebrew (Apple Silicon)
+			"/usr/local/etc/gost/gost-engine.cnf",    // Homebrew (Intel)
+			"/opt/local/etc/gost/gost-engine.cnf",    // MacPorts
+		}
+	case "linux":
+		return []string{
+			"/etc/ssl/gost.cnf",
+			"/etc/pki/tls/gost.cnf", // Fedora/RHEL layout
+		}
+	default:
+		return nil
+	}
+}
+
+// engineCNT shells out to the gost-engine CLI to produce the ground-truth
+// keystream (XOR over zero) for the given key/iv. tc26 selects -gost89-cnt-12
+// (tc26-Z); otherwise -gost89-cnt (CryptoPro-A default). Returns ok=false if
+// the engine is unavailable so the caller can skip.
+func engineCNT(t *testing.T, key, iv []byte, n int, tc26 bool) (out []byte, ok bool) {
+	t.Helper()
+	bin, ok := opensslBin()
+	if !ok {
+		return nil, false
+	}
+	mode := "-gost89-cnt"
+	if tc26 {
+		mode = "-gost89-cnt-12"
+	}
+	cmd := exec.Command(bin, "enc", "-engine", "gost", mode,
+		"-K", hexstr(key), "-iv", hexstr(iv), "-nopad")
+	cmd.Stdin = bytes.NewReader(make([]byte, n)) // n zero bytes
+	cmd.Env = os.Environ()
+	if conf := gostEngineConf(); conf != "" {
+		cmd.Env = append(cmd.Env, "OPENSSL_CONF="+conf)
+	}
+	res, err := cmd.Output()
+	if err != nil || len(res) < n {
+		t.Logf("engine CLI unavailable (%v); skipping", err)
+		return nil, false
+	}
+	return res[:n], true
+}
+
+func hexstr(b []byte) string {
+	const hexd = "0123456789abcdef"
+	s := make([]byte, len(b)*2)
+	for i, v := range b {
+		s[i*2] = hexd[v>>4]
+		s[i*2+1] = hexd[v&0xF]
+	}
+	return string(s)
+}
+
+// TestDiff_GostEngineCLI is the authoritative random differential: it diffs
+// the clean-room streaming impl against the gost-engine CLI ground truth over
+// random key/IV and random lengths (including >1024 to exercise meshing),
+// driving the clean-room side through random non-block-aligned chunk splits.
+func TestDiff_GostEngineCLI(t *testing.T) {
+	r := rand.New(rand.NewSource(0x6057C17))
+	for _, tc := range []struct {
+		name string
+		sbox gost28147.SBox
+		tc26 bool
+	}{
+		{"CryptoPro-A", gost28147.SboxCryptoProA, false},
+		{"tc26-Z", gost28147.SboxTC26Z, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for iter := 0; iter < 40; iter++ {
+				key := make([]byte, gost28147.KeySize)
+				iv := make([]byte, gost28147.BlockSize)
+				r.Read(key)
+				r.Read(iv)
+				n := r.Intn(1300)
+				if iter%5 == 0 {
+					n = 1024 + r.Intn(48) // straddle meshing
+				}
+
+				want, ok := engineCNT(t, key, iv, n, tc.tc26)
+				if !ok {
+					t.Skip("gost-engine CLI not available")
+				}
+
+				// Drive clean-room through random sub-block chunks.
+				s := NewCNT(gost28147.NewCipher(key, tc.sbox), iv, tc.sbox)
+				got := make([]byte, n)
+				zero := make([]byte, n)
+				off := 0
+				for off < n {
+					chunk := 1 + r.Intn(13)
+					if off+chunk > n {
+						chunk = n - off
+					}
+					s.XORKeyStream(got[off:off+chunk], zero[off:off+chunk])
+					off += chunk
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("iter=%d key=%x iv=%x n=%d\n got=%x\nwant=%x",
+						iter, key, iv, n, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestDiff_InternalGostOracle keeps the requested gogost-oracle (CryptoPro-A)
+// differential. The oracle is the guide's blessed reference ONLY for the
+// pinned zero-key/zero-IV conformance vector: for non-zero IVs — and even for
+// zero IV with certain keys — gogost's CTR carry bug (guide D4) makes it
+// diverge from ground truth before 1024 bytes (this was observed and verified
+// against the engine: the clean-room impl matched the engine byte-for-byte
+// where the oracle did not). So this test pins the oracle on the zero/zero
+// vector across a range of split-call boundaries; the random differential
+// lives in TestDiff_GostEngineCLI against the engine ground truth instead.
+func TestDiff_InternalGostOracle(t *testing.T) {
+	key := make([]byte, gost28147.KeySize)
+	iv := make([]byte, gost28147.BlockSize)
+	sbox := gost28147.SboxCryptoProA
+	r := rand.New(rand.NewSource(0xC0FFEE))
+
+	for iter := 0; iter < 200; iter++ {
+		n := r.Intn(oracleMeshingFreeLimit) // < 1024: oracle meshing-free here
+		pt := make([]byte, n)
+		r.Read(pt)
+
+		ref, err := gost.NewGOST28147_CNT(key, iv)
+		if err != nil {
+			t.Fatalf("oracle ctor: %v", err)
+		}
+		want := make([]byte, n)
+		ref.XORKeyStream(want, pt) // ONE call only (D4)
+
+		// Drive clean-room through random non-block-aligned chunk splits.
+		s := NewCNT(gost28147.NewCipher(key, sbox), iv, sbox)
+		got := make([]byte, n)
+		off := 0
+		for off < n {
+			chunk := 1 + r.Intn(13)
+			if off+chunk > n {
+				chunk = n - off
+			}
+			s.XORKeyStream(got[off:off+chunk], pt[off:off+chunk])
+			off += chunk
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("iter=%d n=%d\n got=%x\nwant=%x", iter, n, got, want)
+		}
+	}
+}
+
+// FuzzDiff_InternalGostOracle mirrors TestDiff_InternalGostOracle: it feeds the
+// same plaintext to the in-repo gogost oracle (one XORKeyStream call, per D4)
+// and to the clean-room impl (driven through fuzzer-chosen non-block-aligned
+// chunk splits), asserting byte-equal output. As documented above, the gogost
+// oracle is only a valid reference for the zero-key/zero-IV, meshing-free
+// (n < 1024) regime, so the fuzzer holds key/IV at zero and caps the length;
+// only the plaintext and the chunk-split schedule vary.
+func FuzzDiff_InternalGostOracle(f *testing.F) {
+	f.Add([]byte("the quick brown fox"), uint8(7))
+	f.Add(make([]byte, 512), uint8(13))
+	f.Add(seedHex("00112233445566778899aabbccddeeff"), uint8(1))
+
+	f.Fuzz(func(t *testing.T, pt []byte, chunkSeed uint8) {
+		// Hold the oracle in its valid regime: zero key, zero IV, n < 1024.
+		key := make([]byte, gost28147.KeySize)
+		iv := make([]byte, gost28147.BlockSize)
+		sbox := gost28147.SboxCryptoProA
+
+		if len(pt) >= oracleMeshingFreeLimit {
+			pt = pt[:oracleMeshingFreeLimit-1]
+		}
+		n := len(pt)
+
+		ref, err := gost.NewGOST28147_CNT(key, iv)
+		if err != nil {
+			t.Fatalf("oracle ctor: %v", err)
+		}
+		want := make([]byte, n)
+		ref.XORKeyStream(want, pt) // ONE call only (D4)
+
+		// Drive clean-room through a deterministic, fuzzer-seeded chunk split so
+		// the partial-block streaming path is exercised across boundaries.
+		s := NewCNT(gost28147.NewCipher(key, sbox), iv, sbox)
+		got := make([]byte, n)
+		off := 0
+		step := chunkSeed
+		for off < n {
+			chunk := 1 + int(step%13)
+			if off+chunk > n {
+				chunk = n - off
+			}
+			s.XORKeyStream(got[off:off+chunk], pt[off:off+chunk])
+			off += chunk
+			step = step*31 + 7 // vary chunk sizes deterministically
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("n=%d\n got=%x\nwant=%x", n, got, want)
+		}
+	})
+}
+
+// TestDiff_OracleLacksMeshing documents (and locks in) the meshing boundary:
+// the gogost oracle and the clean-room impl agree byte-for-byte up to 1024
+// bytes (zero key/IV) and diverge at exactly offset 1024 because the oracle's
+// raw gost28147.CTR performs no CryptoPro key meshing while we do. Our
+// post-mesh bytes equal the pinned engine KAT, proving the divergence is the
+// oracle's missing meshing, not a bug on our side.
+func TestDiff_OracleLacksMeshing(t *testing.T) {
+	key := make([]byte, gost28147.KeySize)
+	iv := make([]byte, gost28147.BlockSize)
+	sbox := gost28147.SboxCryptoProA
+	const n = 1040
+
+	ref, err := gost.NewGOST28147_CNT(key, iv)
+	if err != nil {
+		t.Fatalf("oracle ctor: %v", err)
+	}
+	oracle := make([]byte, n)
+	ref.XORKeyStream(oracle, make([]byte, n))
+
+	mine := make([]byte, n)
+	NewCNT(gost28147.NewCipher(key, sbox), iv, sbox).XORKeyStream(mine, make([]byte, n))
+
+	if !bytes.Equal(mine[:1024], oracle[:1024]) {
+		t.Fatalf("clean-room and oracle disagree before the meshing boundary")
+	}
+	if bytes.Equal(mine[1024:1032], oracle[1024:1032]) {
+		t.Fatalf("expected divergence at the meshing boundary, got agreement")
+	}
+	want := mustHex(t, "56f45eab8381b608") // pinned engine post-mesh (CryptoPro-A)
+	if !bytes.Equal(mine[1024:1032], want) {
+		t.Fatalf("post-mesh [1024:1032] = %x, want pinned engine %x", mine[1024:1032], want)
+	}
+}
