@@ -30,3 +30,52 @@ jobs:
       - name: test (facade KAT/vector + clean-room↔gogost parity)
         working-directory: gostcrypto-compat
         run: go test ./...
+
+  # Builds the GOST reference engine from source and runs the suite against it,
+  # so the live-engine differential (parity/gost28147cnt's TestDiff_GostEngineCLI,
+  # which shells out to `openssl enc -engine gost`) actually executes instead of
+  # self-skipping. v3.0.3 is the vector source pinned in docs/engine-vectors.md.
+  gost-engine:
+    runs-on: ubuntu-latest
+    env:
+      GOST_ENGINE_REF: v3.0.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gostcrypto-compat
+      - uses: actions/checkout@v4
+        with:
+          repository: bigbes/gostcrypto
+          path: gostcrypto
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libssl-dev pkg-config
+
+      - name: clone + build + install gost-engine
+        run: |
+          git clone --branch "$GOST_ENGINE_REF" --depth 1 --recurse-submodules \
+            https://github.com/gost-engine/engine.git gost-engine
+          cmake -S gost-engine -B gost-engine/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build gost-engine/build --config Release -j"$(nproc)"
+          # Installs gost.so into OpenSSL's ENGINESDIR so `-engine gost` resolves it.
+          sudo cmake --install gost-engine/build
+
+      - name: verify the engine loads and the CLI path used by the tests works
+        run: |
+          openssl version
+          openssl engine -t gost
+          # Exercise the exact CLI the live differential invokes; fail the job
+          # (rather than let the test silently skip) if the engine cipher is gone.
+          printf 'gost-engine-smoke' | openssl enc -engine gost -gost89-cnt \
+            -K 0000000000000000000000000000000000000000000000000000000000000000 \
+            -iv 0000000000000000 -nopad | od -An -tx1 | head -1
+
+      - name: test against the live gost-engine
+        working-directory: gostcrypto-compat
+        run: go test ./...
