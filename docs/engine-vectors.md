@@ -60,6 +60,93 @@ LE raw bytes requires ASN.1 DER parsing outside the scope of this porting task.
 
 Skipped: R 34.10-2012-512 sign/verify — our Phase-1 wrapper exposes only 256-bit sign.
 
+## Parity-audit remediation — newly-ported vectors (2026-06-10)
+
+The 18 parity lanes added the following external-anchor KATs. These are distinct
+from the engine-vector suite above; they live in `parity/<prim>/` test files
+rather than `*_engine_vectors_test.go` or `*_pkey_vectors_test.go`.
+
+### KUZ-01 — Kuznyechik ECB RFC 7801 anchor
+
+**File:** `parity/kuznyechik/kuznyechik_parity_test.go` → `TestDiffKAT`
+
+Source: RFC 7801 §5.5 / GOST R 34.12-2015 §A.1. The pinned ciphertext
+`7f679d90bebc24305a468d42b9d4edcd` for key `8899…abcdef` / pt `1122…9988`
+is now both the Encrypt anchor and the Decrypt parity input. Previously the
+test lacked an explicit `wantCT` literal.
+
+### G89I-03 — GOST 28147 IMIT gost-engine vectors in parity package
+
+**File:** `parity/gost28147imit/gost28147imit_parity_test.go` → `TestEngineVectors_IMIT`
+
+Source: `tmp/engine/test/02-mac.t:162` (1024-byte, no meshing, want `2ee8d13d`)
+and `tmp/engine/test/02-mac.t:185` (266240-byte testbig.dat, 260 meshing
+boundaries, want `5efab81f`). These are the same vectors as the root-package
+`TestGost_GOST28147_IMIT_Wrapper_*` tests; adding them here gives the parity
+package an independent engine anchor that does not depend on the root oracle.
+
+### KDF-02 — RFC 7836 Appendix B KDFTree anchor
+
+**File:** `parity/kdftree/kdftree_parity_test.go` → `TestKDFTree256_PinnedRFC`
+
+Sources:
+- Example 10 (64-byte K1‖K2): `gostcrypto/kdftree/rfc/rfc7836.txt` lines
+  1528–1555. K1 = `22b683…79d16b`, K2 = `074c93…1531f9`. Confirmed by
+  `tmp/engine/test_keyexpimp.c:78-97` (KAT-1).
+- Example 9 (32-byte): `rfc7836.txt` lines 1499–1526. Want
+  `a1aa5f…922ed9`. The [L]_b suffix differs between 32B and 64B, so each
+  pins a distinct HMAC message — they are not redundant.
+
+### SIG-02 — GOST R 34.10-2012 Appendix A.2 512-bit sign KAT
+
+**File:** `parity/gost3410sign/gost3410sign_parity_test.go` → `TestDiff_Pinned512_A2`
+
+Source: GOST R 34.10-2012, Appendix A.2 (512-bit test param set worked
+example). The `katSigSR512` constant pins the `s‖r` signature bytes from the
+standard. Both the clean-room `SignDigest` and the gogost oracle must reproduce
+them byte-for-byte, and all four cross-verify combinations pass.
+
+### KEG-03 — gost-engine 3.0.3 zero-UKM KEG vector
+
+**File:** `parity/keg/keg_parity_test.go` → `TestKEG2012_256_ZeroUKM_KAT`
+
+Source: gost-engine 3.0.3 via `openssl pkeyutl -derive -engine gost
+-pkeyopt ukmhex:00…00` on privA/pubB TC26 256-A keys. The 64-byte output
+`zeroUKMWantHex` pins the all-zero UKM special case (`real_ukm = 00…00 01`,
+`gost_ec_keyx.c:140-142`). Pair-symmetry (B→A produces identical bytes) verified.
+
+### KXP-01 — RFC 9189 Appendix A.1.3.2 Kuznyechik KExp15 vector
+
+**File:** `parity/kexp15/kexp15_parity_test.go` → `TestKexp15Conformance_Kuznyechik`
+
+Source: bundled RFC 9189 at `gostcrypto/kexp15/rfc/rfc9189.txt`, Client side
+of the TLS_GOSTR341112_256_WITH_KUZNYECHIK_CTR_OMAC key-exchange example:
+- shared (PMS): lines 3158–3159
+- K_Exp_MAC ‖ K_Exp_ENC: lines 3189–3192
+- IV: line 3195
+- want (PMSEXP): lines 3198–3200
+
+This is the only independent anchor for the Kuznyechik (128-bit block)
+OMAC/CTR composition path; without it a shared mode bug in both twins passes.
+
+### KWP-01/02 — gost-engine 3.0.3 CryptoPro-A and TC26-Z KeyWrap KATs
+
+**File:** `parity/keywrap/helpers_test.go` (constants), consumed by
+`parity/keywrap/keywrap_parity_test.go` → `TestKeyWrapCryptoPro_Differential`
+and `TestDiversify_Differential`.
+
+Sources:
+- `katWrapped` (TC26-Z, 44 bytes): gost-engine 3.0.3 `keyWrapCryptoPro`
+  dylib with `Gost28147_TC26ParamSetZ` on `katKEK`/`katUKM`/`katSession`
+  (see `keywrap-cryptopro.md:332`). `katKEKUKM` pins the intermediate
+  diversified KEK.
+- `katWrappedCryptoProA` (CryptoPro-A, 44 bytes): same inputs, same engine
+  version, `Gost28147_CryptoProParamSetA`. Reproduced via a minimal C harness
+  (`kat.c` calling `keyWrapCryptoPro` from `gost_keywrap.c`); exact command
+  in `helpers_test.go:36-47`.
+
+---
+
 ## Problems / disagreements
 
 1. **GOSTR341194 empty-input** (`tcl_tests/dgst.try:87`): engine `3f25bc1f...`,
