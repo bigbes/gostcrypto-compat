@@ -185,7 +185,7 @@ func TestDiff_GostEngineCLI(t *testing.T) {
 				}
 
 				// Drive clean-room through random sub-block chunks.
-				s := NewCNT(gost28147.NewCipher(key, tc.sbox), iv, tc.sbox)
+				s := NewCNT(gost28147.NewCipher(key, tc.sbox), iv)
 				got := make([]byte, n)
 				zero := make([]byte, n)
 				off := 0
@@ -234,7 +234,7 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 		ref.XORKeyStream(want, pt) // ONE call only (D4)
 
 		// Drive clean-room through random non-block-aligned chunk splits.
-		s := NewCNT(gost28147.NewCipher(key, sbox), iv, sbox)
+		s := NewCNT(gost28147.NewCipher(key, sbox), iv)
 		got := make([]byte, n)
 		off := 0
 		for off < n {
@@ -283,7 +283,7 @@ func FuzzDiff_InternalGostOracle(f *testing.F) {
 
 		// Drive clean-room through a deterministic, fuzzer-seeded chunk split so
 		// the partial-block streaming path is exercised across boundaries.
-		s := NewCNT(gost28147.NewCipher(key, sbox), iv, sbox)
+		s := NewCNT(gost28147.NewCipher(key, sbox), iv)
 		got := make([]byte, n)
 		off := 0
 		step := chunkSeed
@@ -322,7 +322,7 @@ func TestDiff_OracleLacksMeshing(t *testing.T) {
 	ref.XORKeyStream(oracle, make([]byte, n))
 
 	mine := make([]byte, n)
-	NewCNT(gost28147.NewCipher(key, sbox), iv, sbox).XORKeyStream(mine, make([]byte, n))
+	NewCNT(gost28147.NewCipher(key, sbox), iv).XORKeyStream(mine, make([]byte, n))
 
 	if !bytes.Equal(mine[:1024], oracle[:1024]) {
 		t.Fatalf("clean-room and oracle disagree before the meshing boundary")
