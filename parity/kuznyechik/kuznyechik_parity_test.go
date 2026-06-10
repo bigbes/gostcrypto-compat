@@ -27,7 +27,11 @@ func TestDiffAgainstGost(t *testing.T) {
 		mineCT := make([]byte, 16)
 		c.Encrypt(mineCT, blk)
 
-		refCT := gost.KuznyechikEncrypt(key, blk)
+		refCT, err := gost.KuznyechikEncrypt(key, blk)
+		if err != nil {
+			t.Fatalf("KuznyechikEncrypt iter=%d: %v", iter, err)
+		}
+
 		if !bytes.Equal(mineCT, refCT) {
 			t.Fatalf("Encrypt mismatch iter=%d\n key=%x blk=%x\n mine=%x ref=%x",
 				iter, key, blk, mineCT, refCT)
@@ -40,7 +44,11 @@ func TestDiffAgainstGost(t *testing.T) {
 				iter, key, blk, minePT)
 		}
 
-		refPT := gost.KuznyechikDecrypt(key, mineCT)
+		refPT, err := gost.KuznyechikDecrypt(key, mineCT)
+		if err != nil {
+			t.Fatalf("KuznyechikDecrypt iter=%d: %v", iter, err)
+		}
+
 		if !bytes.Equal(refPT, blk) {
 			t.Fatalf("gost.KuznyechikDecrypt mismatch iter=%d\n key=%x ct=%x got=%x want=%x",
 				iter, key, mineCT, refPT, blk)
@@ -58,7 +66,11 @@ func TestDiffKAT(t *testing.T) {
 	mineCT := make([]byte, 16)
 	c.Encrypt(mineCT, pt)
 
-	refCT := gost.KuznyechikEncrypt(key, pt)
+	refCT, err := gost.KuznyechikEncrypt(key, pt)
+	if err != nil {
+		t.Fatalf("KuznyechikEncrypt KAT: %v", err)
+	}
+
 	if !bytes.Equal(mineCT, refCT) {
 		t.Fatalf("KAT Encrypt mismatch: mine=%x ref=%x", mineCT, refCT)
 	}
@@ -84,7 +96,12 @@ func FuzzDiffKuznyechik(f *testing.F) {
 
 		mineCT := make([]byte, 16)
 		c.Encrypt(mineCT, blk)
-		refCT := gost.KuznyechikEncrypt(key, blk)
+
+		refCT, err := gost.KuznyechikEncrypt(key, blk)
+		if err != nil {
+			t.Fatalf("KuznyechikEncrypt: %v", err)
+		}
+
 		if !bytes.Equal(mineCT, refCT) {
 			t.Fatalf("Encrypt mismatch\n key=%x blk=%x\n mine=%x ref=%x", key, blk, mineCT, refCT)
 		}
@@ -92,7 +109,12 @@ func FuzzDiffKuznyechik(f *testing.F) {
 		// Decrypt diff on an arbitrary block (fuzzer-supplied ciphertext).
 		minePT := make([]byte, 16)
 		c.Decrypt(minePT, blk)
-		refPT := gost.KuznyechikDecrypt(key, blk)
+
+		refPT, err := gost.KuznyechikDecrypt(key, blk)
+		if err != nil {
+			t.Fatalf("KuznyechikDecrypt: %v", err)
+		}
+
 		if !bytes.Equal(minePT, refPT) {
 			t.Fatalf("Decrypt mismatch\n key=%x blk=%x\n mine=%x ref=%x", key, blk, minePT, refPT)
 		}

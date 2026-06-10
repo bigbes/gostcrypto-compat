@@ -57,7 +57,12 @@ func TestKEG2012_256_DiffOracle(t *testing.T) {
 				t.Fatalf("oracle != pinned vector:\n ref %x\nwant %x", ref[:], want)
 			}
 
-			got, err := KEG2012_256(curve, pub, priv, ukm)
+			// The clean-room keg.KEG2012_256 takes a *gost3410curves.Curve and
+			// defaults to TC26 256-A on nil; the oracle curve here is exactly
+			// TC26 256-A, so nil selects the matching domain. (The two curve
+			// wrapper types differ — gost.Curve wraps gogost, keg takes the BSD
+			// gost3410curves.Curve — so nil is the clean way to align them.)
+			got, err := KEG2012_256(nil, pub, priv, ukm)
 			if err != nil {
 				t.Fatalf("clean-room KEG: %v", err)
 			}
@@ -99,7 +104,9 @@ func TestKEG2012_256_DiffEphemeral(t *testing.T) {
 			if err != nil {
 				t.Fatalf("seed %d ukm %d: oracle: %v", si, ui, err)
 			}
-			got, err := KEG2012_256(curve, pubB, privA, ukm)
+			// nil selects keg's default TC26 256-A, the same domain as the
+			// oracle curve (see TestKEG2012_256_DiffOracle for the rationale).
+			got, err := KEG2012_256(nil, pubB, privA, ukm)
 			if err != nil {
 				t.Fatalf("seed %d ukm %d: clean-room: %v", si, ui, err)
 			}
@@ -109,7 +116,7 @@ func TestKEG2012_256_DiffEphemeral(t *testing.T) {
 			}
 
 			// Free pair-symmetry oracle.
-			sym, err := KEG2012_256(curve, pubA, privB, ukm)
+			sym, err := KEG2012_256(nil, pubA, privB, ukm)
 			if err != nil {
 				t.Fatalf("seed %d ukm %d: clean-room sym: %v", si, ui, err)
 			}
@@ -151,7 +158,8 @@ func FuzzKEG2012_256_DiffOracle(f *testing.F) {
 		if err != nil {
 			t.Skipf("oracle KEG: %v", err)
 		}
-		got, err := KEG2012_256(curve, pubB, privA, ukm)
+		// nil selects keg's default TC26 256-A (the oracle curve).
+		got, err := KEG2012_256(nil, pubB, privA, ukm)
 		if err != nil {
 			t.Fatalf("clean-room KEG: %v", err)
 		}
@@ -160,7 +168,7 @@ func FuzzKEG2012_256_DiffOracle(f *testing.F) {
 		}
 
 		// Pair symmetry: A→B must equal B→A.
-		sym, err := KEG2012_256(curve, pubA, privB, ukm)
+		sym, err := KEG2012_256(nil, pubA, privB, ukm)
 		if err != nil {
 			t.Fatalf("clean-room sym: %v", err)
 		}

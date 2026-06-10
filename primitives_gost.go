@@ -8,6 +8,7 @@ package gostcryptocompat
 import (
 	"crypto/rand"
 	"encoding/asn1"
+	"errors"
 	"fmt"
 
 	"go.stargrave.org/gogost/v7/gost28147"
@@ -17,6 +18,13 @@ import (
 	"go.stargrave.org/gogost/v7/gost341194"
 	"go.stargrave.org/gogost/v7/gost3412128"
 	"go.stargrave.org/gogost/v7/gost341264"
+)
+
+// Sentinel errors for the one-shot block helper input validation.
+var (
+	errKuznyechikInputLen = errors.New("gost: KuznyechikEncrypt/Decrypt: input must be exactly 16 bytes")
+	errMagmaInputLen      = errors.New("gost: MagmaEncrypt/Decrypt: input must be exactly 8 bytes")
+	errGOST28147InputLen  = errors.New("gost: GOST2814789Encrypt/Decrypt: input must be exactly 8 bytes")
 )
 
 // Curve is an opaque handle for a GOST R 34.10 curve. It wraps the gogost
@@ -72,63 +80,93 @@ func CurveByOID(oid asn1.ObjectIdentifier) (*Curve, error) {
 // ── Kuznyechik (GOST R 34.12-2015, 128-bit) ──────────────────────────────────
 
 // KuznyechikEncrypt encrypts one 16-byte block with the given 32-byte key.
-// It panics if len(key) != 32 or len(plaintext) != 16.
-func KuznyechikEncrypt(key, plaintext []byte) []byte {
+// Returns an error if the input is not exactly 16 bytes.
+func KuznyechikEncrypt(key, plaintext []byte) ([]byte, error) {
+	if len(plaintext) != gost3412128.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errKuznyechikInputLen, len(plaintext))
+	}
+
 	c := gost3412128.NewCipher(key)
 	dst := make([]byte, gost3412128.BlockSize)
 	c.Encrypt(dst, plaintext)
-	return dst
+
+	return dst, nil
 }
 
 // KuznyechikDecrypt decrypts one 16-byte block with the given 32-byte key.
-// It panics if len(key) != 32 or len(ciphertext) != 16.
-func KuznyechikDecrypt(key, ciphertext []byte) []byte {
+// Returns an error if the input is not exactly 16 bytes.
+func KuznyechikDecrypt(key, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) != gost3412128.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errKuznyechikInputLen, len(ciphertext))
+	}
+
 	c := gost3412128.NewCipher(key)
 	dst := make([]byte, gost3412128.BlockSize)
 	c.Decrypt(dst, ciphertext)
-	return dst
+
+	return dst, nil
 }
 
 // ── Magma (GOST R 34.12-2015, 64-bit) ────────────────────────────────────────
 
 // MagmaEncrypt encrypts one 8-byte block with the given 32-byte key.
-// It panics if len(key) != 32 or len(plaintext) != 8.
-func MagmaEncrypt(key, plaintext []byte) []byte {
+// Returns an error if the input is not exactly 8 bytes.
+func MagmaEncrypt(key, plaintext []byte) ([]byte, error) {
+	if len(plaintext) != gost341264.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errMagmaInputLen, len(plaintext))
+	}
+
 	c := gost341264.NewCipher(key)
 	dst := make([]byte, gost341264.BlockSize)
 	c.Encrypt(dst, plaintext)
-	return dst
+
+	return dst, nil
 }
 
 // MagmaDecrypt decrypts one 8-byte block with the given 32-byte key.
-// It panics if len(key) != 32 or len(ciphertext) != 8.
-func MagmaDecrypt(key, ciphertext []byte) []byte {
+// Returns an error if the input is not exactly 8 bytes.
+func MagmaDecrypt(key, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) != gost341264.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errMagmaInputLen, len(ciphertext))
+	}
+
 	c := gost341264.NewCipher(key)
 	dst := make([]byte, gost341264.BlockSize)
 	c.Decrypt(dst, ciphertext)
-	return dst
+
+	return dst, nil
 }
 
 // ── GOST 28147-89 ─────────────────────────────────────────────────────────────
 
 // GOST2814789Encrypt encrypts one 8-byte block with the given 32-byte key using
-// the default (CryptoPro-A) S-box.
-// It panics if len(key) != 32 or len(plaintext) != 8.
-func GOST2814789Encrypt(key, plaintext []byte) []byte {
+// the default (CryptoPro-A) S-box. Returns an error if the input is not
+// exactly 8 bytes.
+func GOST2814789Encrypt(key, plaintext []byte) ([]byte, error) {
+	if len(plaintext) != gost28147.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errGOST28147InputLen, len(plaintext))
+	}
+
 	c := gost28147.NewCipher(key, gost28147.SboxDefault)
 	dst := make([]byte, gost28147.BlockSize)
 	c.Encrypt(dst, plaintext)
-	return dst
+
+	return dst, nil
 }
 
 // GOST2814789Decrypt decrypts one 8-byte block with the given 32-byte key using
-// the default (CryptoPro-A) S-box.
-// It panics if len(key) != 32 or len(ciphertext) != 8.
-func GOST2814789Decrypt(key, ciphertext []byte) []byte {
+// the default (CryptoPro-A) S-box. Returns an error if the input is not
+// exactly 8 bytes.
+func GOST2814789Decrypt(key, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) != gost28147.BlockSize {
+		return nil, fmt.Errorf("%w: got %d", errGOST28147InputLen, len(ciphertext))
+	}
+
 	c := gost28147.NewCipher(key, gost28147.SboxDefault)
 	dst := make([]byte, gost28147.BlockSize)
 	c.Decrypt(dst, ciphertext)
-	return dst
+
+	return dst, nil
 }
 
 // ── Streebog (GOST R 34.11-2012) ─────────────────────────────────────────────
