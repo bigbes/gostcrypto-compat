@@ -51,30 +51,12 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: install build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake build-essential libssl-dev pkg-config
-
-      - name: clone + build + install gost-engine
-        run: |
-          git clone --branch "$GOST_ENGINE_REF" --depth 1 --recurse-submodules \
-            https://github.com/gost-engine/engine.git gost-engine
-          cmake -S gost-engine -B gost-engine/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build gost-engine/build --config Release -j"$(nproc)"
-          # Installs gost.so into OpenSSL's ENGINESDIR so `-engine gost` resolves it.
-          sudo cmake --install gost-engine/build
-
-      - name: verify the engine loads and the CLI path used by the tests works
-        run: |
-          openssl version
-          openssl engine -t gost
-          # Exercise the exact CLI the live differential invokes; fail the job
-          # (rather than let the test silently skip) if the engine cipher is gone.
-          printf 'gost-engine-smoke' | openssl enc -engine gost -gost89-cnt \
-            -K 0000000000000000000000000000000000000000000000000000000000000000 \
-            -iv 0000000000000000 -nopad | od -An -tx1 | head -1
+      # Clone + build + install gost-engine and assert the CLI path works.
+      # Shared with gostcrypto's parity workflow via this local composite action
+      # (both repos check out gostcrypto-compat as a sibling).
+      - uses: ./gostcrypto-compat/.github/actions/setup-gost-engine
+        with:
+          ref: ${{ env.GOST_ENGINE_REF }}
 
       - name: test against the live gost-engine
         working-directory: gostcrypto-compat
