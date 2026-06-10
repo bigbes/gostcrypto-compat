@@ -184,7 +184,7 @@ func TestDiff_GostEngineCLI(t *testing.T) {
 		{"tc26-Z", gost28147.SboxTC26Z, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for iter := 0; iter < 40; iter++ {
+			for iter := range 40 {
 				key := make([]byte, gost28147.KeySize)
 				iv := make([]byte, gost28147.BlockSize)
 				r.Read(key)
@@ -265,10 +265,9 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			r2 := rand.New(rand.NewSource(0xC0FFEE)) // same seed per S-box for reproducibility
-			for iter := 0; iter < 200; iter++ {
+			for iter := range 200 {
 				n := r2.Intn(oracleMeshingFreeLimit) // < 1024: oracle meshing-free here
 				pt := make([]byte, n)
 				r2.Read(pt)

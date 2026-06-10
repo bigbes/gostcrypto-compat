@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"testing"
 
-	curves "github.com/bigbes/gostcrypto/gost3410curves"
 	gost "github.com/bigbes/gostcrypto-compat"
+	curves "github.com/bigbes/gostcrypto/gost3410curves"
 )
 
 func mustHex(t *testing.T, s string) []byte {

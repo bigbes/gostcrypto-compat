@@ -23,7 +23,7 @@ func TestMagmaDifferential(t *testing.T) {
 	key := make([]byte, KeySize)
 	pt := make([]byte, BlockSize)
 
-	for i := 0; i < 50000; i++ {
+	for i := range 50000 {
 		rng.Read(key)
 		rng.Read(pt)
 

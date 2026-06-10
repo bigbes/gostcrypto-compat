@@ -104,10 +104,7 @@ func (o *OMAC) Write(p []byte) (int, error) {
 	for len(p) > 0 {
 		// Fill buf up to blockSize.
 		free := o.blockSize - len(o.buf)
-		take := free
-		if take > len(p) {
-			take = len(p)
-		}
+		take := min(free, len(p))
 		o.buf = append(o.buf, p[:take]...)
 		p = p[take:]
 

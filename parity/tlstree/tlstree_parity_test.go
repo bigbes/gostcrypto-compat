@@ -57,7 +57,6 @@ func Test_TLSTree_Conformance(t *testing.T) {
 // Finding: TLS-01.
 func Test_TLSTree_BadMasterKeyLength(t *testing.T) {
 	for _, n := range []int{0, 16, 31, 33, 64} {
-		n := n
 		t.Run(fmt.Sprintf("len=%d", n), func(t *testing.T) {
 			bad := make([]byte, n)
 			mustPanic := func(name string, fn func()) {
@@ -111,8 +110,8 @@ func Test_TLSTree_KAT_vs_Oracle(t *testing.T) {
 // both suites (TLS-03), and a cross-C3-window case (seq1=63, seq2=64).
 func Fuzz_TLSTree_Conformance(f *testing.F) {
 	// C3-boundary seeds (original three, updated for two-seq signature).
-	f.Add(bytes.Repeat([]byte{0xFF}, 32), uint64(63), uint64(64), false)  // cross-C3-window, Kuznyechik
-	f.Add(bytes.Repeat([]byte{0x00}, 32), uint64(0), uint64(1), false)    // same C3 window
+	f.Add(bytes.Repeat([]byte{0xFF}, 32), uint64(63), uint64(64), false)    // cross-C3-window, Kuznyechik
+	f.Add(bytes.Repeat([]byte{0x00}, 32), uint64(0), uint64(1), false)      // same C3 window
 	f.Add(bytes.Repeat([]byte{0x11}, 32), uint64(4096), uint64(4096), true) // same seq twice, Magma
 	// Level-2 boundary seeds (TLS-03).
 	// Kuznyechik C2 boundary: 2^19 = 524288

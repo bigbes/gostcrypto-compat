@@ -208,13 +208,12 @@ func TestKDFTree256_Truncation_Parity(t *testing.T) {
 		lRepr   []byte // [L]_b = encodeMinBE(outLen*8)
 		nBlocks int
 	}{
-		{40, []byte{0x01, 0x40}, 2},  // 40*8=320=0x140 (2 bytes)
-		{48, []byte{0x01, 0x80}, 2},  // 48*8=384=0x180 (2 bytes)
-		{16, []byte{0x80}, 1},        // 16*8=128=0x80  (1 byte)
+		{40, []byte{0x01, 0x40}, 2}, // 40*8=320=0x140 (2 bytes)
+		{48, []byte{0x01, 0x80}, 2}, // 48*8=384=0x180 (2 bytes)
+		{16, []byte{0x80}, 1},       // 16*8=128=0x80  (1 byte)
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run("outLen="+string(rune('0'+tc.outLen/10))+string(rune('0'+tc.outLen%10)), func(t *testing.T) {
 			got := KDFTree256(key, label, seed, 1, tc.outLen)
 			if len(got) != tc.outLen {

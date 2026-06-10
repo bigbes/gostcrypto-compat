@@ -77,7 +77,6 @@ func assertBigEq(t *testing.T, field string, a, b *big.Int) {
 // (CRV-04).
 func TestCurveConstantsDifferential(t *testing.T) {
 	for _, tc := range allOIDs {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			mine := mustCurve(t, tc.oid)
 			ref := mustGogostCurve(t, tc.oid)
@@ -135,7 +134,6 @@ func TestCurveConstantsDifferential(t *testing.T) {
 // across the two implementations.
 func TestCrossCheckInternalGost(t *testing.T) {
 	for _, tc := range allOIDs {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			mine := mustCurve(t, tc.oid)
 

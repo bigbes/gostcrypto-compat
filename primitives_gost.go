@@ -347,9 +347,9 @@ func keyDiversifyCryptoPro(sbox *Sbox, inputKey, ukm []byte) []byte {
 	out := make([]byte, 32)
 	copy(out, inputKey)
 
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		var s1, s2 uint32
-		for j := 0; j < 8; j++ {
+		for j := range 8 {
 			k := uint32(out[4*j]) | uint32(out[4*j+1])<<8 | uint32(out[4*j+2])<<16 | uint32(out[4*j+3])<<24
 			if ukm[i]&(1<<j) != 0 {
 				s1 += k
@@ -476,7 +476,7 @@ func GOST28147_IMIT(key, msg []byte) ([]byte, error) {
 			state := mac.Sum(nil)
 			copy(prev, state)
 			newKey := make([]byte, gost28147.KeySize)
-			for j := 0; j < 4; j++ {
+			for j := range 4 {
 				c.Decrypt(newKey[j*gost28147.BlockSize:(j+1)*gost28147.BlockSize],
 					cryptoProKeyMeshingKey[j*gost28147.BlockSize:(j+1)*gost28147.BlockSize])
 			}
@@ -514,7 +514,7 @@ func GOST28147_IMIT(key, msg []byte) ([]byte, error) {
 			return nil, err
 		}
 	} else {
-		for i := 0; i < nBlocks; i++ {
+		for i := range nBlocks {
 			if err := processBlock(msg[i*gost28147.BlockSize : (i+1)*gost28147.BlockSize]); err != nil {
 				return nil, err
 			}

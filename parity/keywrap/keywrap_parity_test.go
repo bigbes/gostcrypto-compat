@@ -213,10 +213,10 @@ func FuzzKeyWrapCryptoPro_Differential(f *testing.F) {
 	// useTC26Z selects the S-box; raw is normalized into 32|8|32 = 72 bytes.
 	f.Add(true, kat)
 	f.Add(false, kat)
-	f.Add(true, make([]byte, 72))                  // all-zero, tc26-z
-	f.Add(false, make([]byte, 72))                 // all-zero, cryptopro-a
-	f.Add(true, bytes.Repeat([]byte{0xFF}, 72))    // all-0xFF, tc26-z
-	f.Add(false, bytes.Repeat([]byte{0xFF}, 72))   // all-0xFF, cryptopro-a
+	f.Add(true, make([]byte, 72))                       // all-zero, tc26-z
+	f.Add(false, make([]byte, 72))                      // all-zero, cryptopro-a
+	f.Add(true, bytes.Repeat([]byte{0xFF}, 72))         // all-0xFF, tc26-z
+	f.Add(false, bytes.Repeat([]byte{0xFF}, 72))        // all-0xFF, cryptopro-a
 	f.Add(false, append(seed(katKEK), seed(katUKM)...)) // short raw -> zero-padded cek
 
 	f.Fuzz(func(t *testing.T, useTC26Z bool, raw []byte) {

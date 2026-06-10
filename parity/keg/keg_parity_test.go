@@ -3,8 +3,8 @@ package kegparity
 import (
 	"bytes"
 	"encoding/asn1"
-	. "github.com/bigbes/gostcrypto/keg"
 	"github.com/bigbes/gostcrypto/gost3410curves"
+	. "github.com/bigbes/gostcrypto/keg"
 	"testing"
 
 	gost "github.com/bigbes/gostcrypto-compat"
@@ -33,19 +33,20 @@ func oracleCurve(t testing.TB) *gost.Curve {
 // Both modules' registries cover all seven; they are the curves real GOST TLS
 // certificates use (CryptoPro A/B/C and TC26 256 A/B/C/D, RFC 9189 §A.1.3).
 // Note: TC26-256-B == CryptoPro-A, TC26-256-C == CryptoPro-B,
-//       TC26-256-D == CryptoPro-C (distinct OIDs but same curve constants).
+//
+//	TC26-256-D == CryptoPro-C (distinct OIDs but same curve constants).
 var curve256OIDs = []struct {
 	name      string
-	cleanRoom string                 // dotted-decimal for gost3410curves.CurveByOID
-	oracle    asn1.ObjectIdentifier  // for gost.CurveByOID
+	cleanRoom string                // dotted-decimal for gost3410curves.CurveByOID
+	oracle    asn1.ObjectIdentifier // for gost.CurveByOID
 }{
-	{"CryptoPro-A",  "1.2.643.2.2.35.1",   asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 1}},
-	{"CryptoPro-B",  "1.2.643.2.2.35.2",   asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 2}},
-	{"CryptoPro-C",  "1.2.643.2.2.35.3",   asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 3}},
-	{"TC26-256-A",   "1.2.643.7.1.2.1.1.1", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 1}},
-	{"TC26-256-B",   "1.2.643.7.1.2.1.1.2", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 2}},
-	{"TC26-256-C",   "1.2.643.7.1.2.1.1.3", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 3}},
-	{"TC26-256-D",   "1.2.643.7.1.2.1.1.4", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 4}},
+	{"CryptoPro-A", "1.2.643.2.2.35.1", asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 1}},
+	{"CryptoPro-B", "1.2.643.2.2.35.2", asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 2}},
+	{"CryptoPro-C", "1.2.643.2.2.35.3", asn1.ObjectIdentifier{1, 2, 643, 2, 2, 35, 3}},
+	{"TC26-256-A", "1.2.643.7.1.2.1.1.1", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 1}},
+	{"TC26-256-B", "1.2.643.7.1.2.1.1.2", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 2}},
+	{"TC26-256-C", "1.2.643.7.1.2.1.1.3", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 3}},
+	{"TC26-256-D", "1.2.643.7.1.2.1.1.4", asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 1, 4}},
 }
 
 // TestKEG2012_256_DiffOracle pins the clean-room output to the in-repo
@@ -161,7 +162,6 @@ func TestKEG2012_256_MultiCurve(t *testing.T) {
 	ukm := mustHex(t, ukmHex)
 
 	for _, entry := range curve256OIDs {
-		entry := entry // capture
 		t.Run(entry.name, func(t *testing.T) {
 			oracleCrv, err := gost.CurveByOID(entry.oracle)
 			if err != nil {
@@ -280,16 +280,15 @@ func TestKEG2012_256_ErrorParity(t *testing.T) {
 		pub, priv []byte
 		ukm       []byte
 	}{
-		{"ukm_31",     goodPub,              goodPriv,            goodUKM[:31]},
-		{"ukm_33",     goodPub,              goodPriv,            long33UKM},
-		{"pub_short_63", goodPub[:63],       goodPriv,            goodUKM},
-		{"pub_long_65",  append(append([]byte(nil), goodPub...), 0x00), goodPriv, goodUKM},
-		{"priv_short", goodPub,              goodPriv[:31],       goodUKM},
-		{"priv_zero",  goodPub,              make([]byte, 32),    goodUKM},
+		{"ukm_31", goodPub, goodPriv, goodUKM[:31]},
+		{"ukm_33", goodPub, goodPriv, long33UKM},
+		{"pub_short_63", goodPub[:63], goodPriv, goodUKM},
+		{"pub_long_65", append(append([]byte(nil), goodPub...), 0x00), goodPriv, goodUKM},
+		{"priv_short", goodPub, goodPriv[:31], goodUKM},
+		{"priv_zero", goodPub, make([]byte, 32), goodUKM},
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			_, oracleErr := gost.KEG2012_256(curve, tc.pub, tc.priv, tc.ukm)
 			_, cleanErr := KEG2012_256(nil, tc.pub, tc.priv, tc.ukm)
