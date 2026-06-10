@@ -52,14 +52,14 @@ func TestDiffAgainstGost(t *testing.T) {
 		// Kuznyechik, full 16-byte tag.
 		{
 			mine := mynew.New(kuznyechik.NewCipher(key), 16)
-			mine.Write(msg)
+			_, _ = mine.Write(msg)
 			got := mine.Sum(nil)
 
 			ref, err := gost.NewOMAC(gost.NewKuznyechikCipher(key), 16)
 			if err != nil {
 				t.Fatalf("gost.NewOMAC kuz: %v", err)
 			}
-			ref.Write(msg)
+			_, _ = ref.Write(msg)
 			want := ref.Sum(nil)
 
 			if !bytes.Equal(got, want) {
@@ -71,14 +71,14 @@ func TestDiffAgainstGost(t *testing.T) {
 		// Magma, full 8-byte tag.
 		{
 			mine := mynew.New(magma.NewCipher(key), 8)
-			mine.Write(msg)
+			_, _ = mine.Write(msg)
 			got := mine.Sum(nil)
 
 			ref, err := gost.NewOMAC(gost.NewMagmaCipher(key), 8)
 			if err != nil {
 				t.Fatalf("gost.NewOMAC magma: %v", err)
 			}
-			ref.Write(msg)
+			_, _ = ref.Write(msg)
 			want := ref.Sum(nil)
 
 			if !bytes.Equal(got, want) {
@@ -137,8 +137,8 @@ func TestDiffSumNonDestructive(t *testing.T) {
 				}
 
 				// Write first half.
-				mine.Write(half1)
-				ref.Write(half1)
+				_, _ = mine.Write(half1)
+				_, _ = ref.Write(half1)
 
 				// Sum mid-stream (non-destructive check) — both sides must agree.
 				mid1 := mine.Sum(nil)
@@ -158,8 +158,8 @@ func TestDiffSumNonDestructive(t *testing.T) {
 				}
 
 				// Write second half after Sum (Write-after-Sum continuation).
-				mine.Write(half2)
-				ref.Write(half2)
+				_, _ = mine.Write(half2)
+				_, _ = ref.Write(half2)
 
 				// Final Sum on both sides must agree.
 				got := mine.Sum(nil)
@@ -171,7 +171,7 @@ func TestDiffSumNonDestructive(t *testing.T) {
 				// Cross-check: result must equal a fresh instance over the full message.
 				full := append(append([]byte{}, half1...), half2...)
 				fresh := pair.newMine(key, tagSize)
-				fresh.Write(full)
+				_, _ = fresh.Write(full)
 				expected := fresh.Sum(nil)
 				if !bytes.Equal(got, expected) {
 					t.Fatalf("iter=%d continuation != fresh: got=%x expected=%x", iter, got, expected)
@@ -257,18 +257,18 @@ func FuzzDiffAgainstGost(f *testing.F) {
 			prev := 0
 			for _, c := range cuts {
 				if c > prev {
-					mine.Write(msg[prev:c])
+					_, _ = mine.Write(msg[prev:c])
 					prev = c
 				}
 			}
-			mine.Write(msg[prev:])
+			_, _ = mine.Write(msg[prev:])
 		} else {
-			mine.Write(msg)
+			_, _ = mine.Write(msg)
 		}
 		got := mine.Sum(nil)
 
 		// Oracle side: one-shot.
-		ref.Write(msg)
+		_, _ = ref.Write(msg)
 		want := ref.Sum(nil)
 
 		if !bytes.Equal(got, want) {
@@ -320,7 +320,7 @@ func TestDiffTruncatedKATs(t *testing.T) {
 			want := mustHex(t, tc.want)
 
 			mine := tc.newMine(key, tc.tagSize)
-			mine.Write(msg)
+			_, _ = mine.Write(msg)
 			got := mine.Sum(nil)
 			if !bytes.Equal(got, want) {
 				t.Fatalf("clean-room: got %x want %x", got, want)
@@ -330,7 +330,7 @@ func TestDiffTruncatedKATs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("oracle ctor: %v", err)
 			}
-			ref.Write(msg)
+			_, _ = ref.Write(msg)
 			r := ref.Sum(nil)
 			if !bytes.Equal(r, want) {
 				t.Fatalf("oracle: got %x want %x", r, want)

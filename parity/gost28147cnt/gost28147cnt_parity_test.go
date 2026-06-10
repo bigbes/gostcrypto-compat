@@ -148,18 +148,6 @@ func mustEngineCNT(t *testing.T, bin string, key, iv []byte, n int, tc26 bool) [
 	return res[:n]
 }
 
-// engineCNT is kept for backward compatibility in tests that probe availability
-// inline. New tests should use isEngineAvailable + mustEngineCNT.
-// Returns ok=false only when the binary is genuinely not resolvable.
-func engineCNT(t *testing.T, key, iv []byte, n int, tc26 bool) (out []byte, ok bool) {
-	t.Helper()
-	bin, ok := opensslBin()
-	if !ok {
-		return nil, false
-	}
-	return mustEngineCNT(t, bin, key, iv, n, tc26), true
-}
-
 func hexstr(b []byte) string {
 	const hexd = "0123456789abcdef"
 	s := make([]byte, len(b)*2)
