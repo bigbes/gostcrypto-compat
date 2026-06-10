@@ -33,13 +33,22 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 			for i := 0; i < BlockSize; i++ {
 				p[i] = byte(x >> (8 * i))
 			}
-			want := gost.GOST2814789Encrypt(key, p[:])
+			want, err := gost.GOST2814789Encrypt(key, p[:])
+			if err != nil {
+				t.Fatalf("GOST2814789Encrypt key#%d: %v", ki, err)
+			}
+
 			got := make([]byte, BlockSize)
 			c.Encrypt(got, p[:])
 			if !bytes.Equal(got, want) {
 				t.Fatalf("key#%d in=%x: clean-room %x != oracle %x", ki, p, got, want)
 			}
-			back := gost.GOST2814789Decrypt(key, want)
+
+			back, err := gost.GOST2814789Decrypt(key, want)
+			if err != nil {
+				t.Fatalf("GOST2814789Decrypt key#%d: %v", ki, err)
+			}
+
 			if !bytes.Equal(back, p[:]) {
 				t.Fatalf("oracle decrypt mismatch key#%d", ki)
 			}
@@ -67,7 +76,12 @@ func FuzzDiffGost28147(f *testing.F) {
 
 		got := make([]byte, BlockSize)
 		c.Encrypt(got, p)
-		want := gost.GOST2814789Encrypt(key, p)
+
+		want, err := gost.GOST2814789Encrypt(key, p)
+		if err != nil {
+			t.Fatalf("GOST2814789Encrypt: %v", err)
+		}
+
 		if !bytes.Equal(got, want) {
 			t.Fatalf("Encrypt mismatch: key=%x in=%x clean-room %x != oracle %x", key, p, got, want)
 		}
@@ -75,7 +89,12 @@ func FuzzDiffGost28147(f *testing.F) {
 		// Decrypt diff on an arbitrary block (fuzzer-supplied ciphertext).
 		minePT := make([]byte, BlockSize)
 		c.Decrypt(minePT, p)
-		refPT := gost.GOST2814789Decrypt(key, p)
+
+		refPT, err := gost.GOST2814789Decrypt(key, p)
+		if err != nil {
+			t.Fatalf("GOST2814789Decrypt: %v", err)
+		}
+
 		if !bytes.Equal(minePT, refPT) {
 			t.Fatalf("Decrypt mismatch: key=%x in=%x clean-room %x != oracle %x", key, p, minePT, refPT)
 		}

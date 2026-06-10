@@ -22,16 +22,27 @@ func TestMagmaDifferential(t *testing.T) {
 		rng.Read(pt)
 
 		ours := MagmaEncrypt(key, pt)
-		theirs := gostref.MagmaEncrypt(key, pt)
+
+		theirs, err := gostref.MagmaEncrypt(key, pt)
+		if err != nil {
+			t.Fatalf("gostref.MagmaEncrypt i=%d: %v", i, err)
+		}
+
 		if !bytes.Equal(ours, theirs) {
 			t.Fatalf("encrypt mismatch: key=%x pt=%x ours=%x ref=%x", key, pt, ours, theirs)
 		}
 
 		oursD := MagmaDecrypt(key, ours)
-		theirsD := gostref.MagmaDecrypt(key, theirs)
+
+		theirsD, err := gostref.MagmaDecrypt(key, theirs)
+		if err != nil {
+			t.Fatalf("gostref.MagmaDecrypt i=%d: %v", i, err)
+		}
+
 		if !bytes.Equal(oursD, theirsD) {
 			t.Fatalf("decrypt mismatch: key=%x ct=%x ours=%x ref=%x", key, ours, oursD, theirsD)
 		}
+
 		if !bytes.Equal(oursD, pt) {
 			t.Fatalf("round-trip failed: key=%x pt=%x back=%x", key, pt, oursD)
 		}
@@ -55,14 +66,24 @@ func FuzzMagmaDifferential(f *testing.F) {
 		pt := fixLen(rndBlk, BlockSize)
 
 		ours := MagmaEncrypt(key, pt)
-		theirs := gostref.MagmaEncrypt(key, pt)
+
+		theirs, err := gostref.MagmaEncrypt(key, pt)
+		if err != nil {
+			t.Fatalf("gostref.MagmaEncrypt: %v", err)
+		}
+
 		if !bytes.Equal(ours, theirs) {
 			t.Fatalf("encrypt mismatch: key=%x pt=%x ours=%x ref=%x", key, pt, ours, theirs)
 		}
 
 		// Decrypt diff on an arbitrary block (fuzzer-supplied ciphertext).
 		oursD := MagmaDecrypt(key, pt)
-		theirsD := gostref.MagmaDecrypt(key, pt)
+
+		theirsD, err := gostref.MagmaDecrypt(key, pt)
+		if err != nil {
+			t.Fatalf("gostref.MagmaDecrypt: %v", err)
+		}
+
 		if !bytes.Equal(oursD, theirsD) {
 			t.Fatalf("decrypt mismatch: key=%x ct=%x ours=%x ref=%x", key, pt, oursD, theirsD)
 		}
