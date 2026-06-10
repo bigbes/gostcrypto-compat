@@ -40,10 +40,7 @@ func ecbDecrypt(block cipher.Block, ct []byte) []byte {
 func xorKeyStreamByChunks(s cipher.Stream, src []byte, chunk int) []byte {
 	out := make([]byte, len(src))
 	for off := 0; off < len(src); off += chunk {
-		end := off + chunk
-		if end > len(src) {
-			end = len(src)
-		}
+		end := min(off+chunk, len(src))
 		s.XORKeyStream(out[off:end], src[off:end])
 	}
 	return out

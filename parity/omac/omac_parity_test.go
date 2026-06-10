@@ -43,7 +43,7 @@ import (
 func TestDiffAgainstGost(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x6f6d6163))
 
-	for iter := 0; iter < 2048; iter++ {
+	for iter := range 2048 {
 		key := make([]byte, 32)
 		rng.Read(key)
 		msg := make([]byte, rng.Intn(70)) // spans 0..>4 blocks for both sizes
@@ -121,7 +121,7 @@ func TestDiffSumNonDestructive(t *testing.T) {
 
 	for _, pair := range pairs {
 		t.Run(pair.name, func(t *testing.T) {
-			for iter := 0; iter < 200; iter++ {
+			for iter := range 200 {
 				key := make([]byte, 32)
 				rng.Read(key)
 				half1 := make([]byte, rng.Intn(35))

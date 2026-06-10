@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	. "github.com/bigbes/gostcrypto/gost28147"
 	gost "github.com/bigbes/gostcrypto-compat"
+	. "github.com/bigbes/gostcrypto/gost28147"
 	gogost28147 "go.stargrave.org/gogost/v7/gost28147"
 )
 
@@ -17,7 +17,7 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 	keys := [][]byte{
 		mustHex(t, "00112233445566778899aabbccddeeff102132435465768798a9bacbdcedf0e1"),
 	}
-	for seed := 0; seed < 64; seed++ {
+	for seed := range 64 {
 		var k [KeySize]byte
 		x := uint64(seed)*0x9E3779B97F4A7C15 + 0xABCDEF
 		for i := range k {
@@ -28,10 +28,10 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 
 	for ki, key := range keys {
 		c := NewCipher(key, SboxCryptoProA)
-		for seed := 0; seed < 64; seed++ {
+		for seed := range 64 {
 			var p [BlockSize]byte
 			x := uint64(seed)*0x100000001B3 + uint64(ki)*0x9E3779B1
-			for i := 0; i < BlockSize; i++ {
+			for i := range BlockSize {
 				p[i] = byte(x >> (8 * i))
 			}
 			want, err := gost.GOST2814789Encrypt(key, p[:])
@@ -83,7 +83,7 @@ func TestDiff_TC26Z_ECB(t *testing.T) {
 		// Pinned KAT key from TestDiff_InternalGostOracle.
 		mustHex(t, "00112233445566778899aabbccddeeff102132435465768798a9bacbdcedf0e1"),
 	}
-	for seed := 0; seed < 64; seed++ {
+	for seed := range 64 {
 		var k [KeySize]byte
 		x := uint64(seed)*0x6C62272E07BB0142 + 0xFEDCBA98
 		for i := range k {
@@ -98,10 +98,10 @@ func TestDiff_TC26Z_ECB(t *testing.T) {
 		// gogost reference TC26-Z cipher (imported directly, not via facade).
 		ref := gogost28147.NewCipher(key, &gogost28147.SboxIdtc26gost28147paramZ)
 
-		for seed := 0; seed < 64; seed++ {
+		for seed := range 64 {
 			var p [BlockSize]byte
 			x := uint64(seed)*0x100000001B3 + uint64(ki)*0xDEADBEEF
-			for i := 0; i < BlockSize; i++ {
+			for i := range BlockSize {
 				p[i] = byte(x >> (8 * i))
 			}
 

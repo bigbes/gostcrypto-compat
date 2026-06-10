@@ -16,7 +16,7 @@ import (
 // keys and blocks, requiring byte-exact agreement plus round-trip identity.
 func TestDiffAgainstGost(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x6b757a))
-	for iter := 0; iter < 4096; iter++ {
+	for iter := range 4096 {
 		key := make([]byte, 32)
 		blk := make([]byte, 16)
 		rng.Read(key)

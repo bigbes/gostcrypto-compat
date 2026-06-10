@@ -94,10 +94,9 @@ func sealAndCheck(t *testing.T, v variant, tagSize int, key, nonce, plain, aad [
 
 func TestMGM_Differential(t *testing.T) {
 	for _, v := range variants {
-		v := v
 		t.Run(v.name, func(t *testing.T) {
 			rng := rand.New(rand.NewSource(0x9058))
-			for iter := 0; iter < 500; iter++ {
+			for range 500 {
 				key := make([]byte, 32)
 				rng.Read(key)
 				nonce := make([]byte, v.blockSize)

@@ -101,11 +101,11 @@ func TestDiff_CrossVerifyRandom(t *testing.T) {
 	newCurve := testParamSetCurve()
 	refCurve := gost.GOST2001TestParamSetCurve()
 
-	for iter := 0; iter < 64; iter++ {
+	for iter := range 64 {
 		prv := make([]byte, 32)
 		dig := make([]byte, 32)
 		k := make([]byte, 32)
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			prv[i] = byte(iter*7 + i*3 + 1)
 			dig[i] = byte(iter*5 + i*11 + 2)
 			k[i] = byte(iter*13 + i*17 + 3)
@@ -163,7 +163,8 @@ func TestDiff_CrossVerifyRandom(t *testing.T) {
 // Source: GOST R 34.10-2012, Appendix A.2.
 // Clean-room curve: stdParamSet512Curve() (constants from the standard).
 // Oracle curve: gogost3410.CurveIdtc26gost341012512paramSetTest()
-//   (third_party/gogost/gost3410/params.go:320 — same constants).
+//
+//	(third_party/gogost/gost3410/params.go:320 — same constants).
 func TestDiff_Pinned512_A2(t *testing.T) {
 	// Clean-room side: the A.2 test param set curve (constructed directly —
 	// not OID-registered, so CurveByOID is not used here).
@@ -253,11 +254,11 @@ func TestDiff_CrossVerify512(t *testing.T) {
 	newCurve := cleanroomCurve512A(t)
 	refCurve := refCurve512A(t)
 
-	for iter := 0; iter < 16; iter++ {
+	for iter := range 16 {
 		prv := make([]byte, 64)
 		dig := make([]byte, 64)
 		k := make([]byte, 64)
-		for i := 0; i < 64; i++ {
+		for i := range 64 {
 			prv[i] = byte(iter*7 + i*3 + 1)
 			dig[i] = byte(iter*5 + i*11 + 2)
 			k[i] = byte(iter*13 + i*17 + 3)
@@ -371,7 +372,7 @@ func TestDiff_RejectionParity(t *testing.T) {
 	t.Run("s_zero", func(t *testing.T) {
 		ps := newCurve.PointSize()
 		badSig := append([]byte(nil), sig...)
-		for i := 0; i < ps; i++ {
+		for i := range ps {
 			badSig[i] = 0x00
 		}
 		if VerifyDigest(newCurve, pub, dig, badSig) {

@@ -98,7 +98,7 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 		1032, 2048, 2049, 3072, 4097, 8192, 12345,
 	)
 
-	for iter := 0; iter < 200; iter++ {
+	for range 200 {
 		key := make([]byte, keySize)
 		rng.Read(key)
 
@@ -123,10 +123,11 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 // gogost-backed facade GOST28147Cipher.SeqMACBlock for both the CryptoPro-A
 // and tc26-Z S-boxes over random keys and blocks, asserting full 8-byte
 // equality. This closes two gaps:
-//   (a) tc26-Z 16-round path is differentially validated against gogost for the
-//       first time (IMIT hardcodes CryptoPro-A, so that path was never covered).
-//   (b) The full 8-byte SeqMAC state is byte-compared across modules; IMIT
-//       truncates to 4 bytes, so the upper 4 bytes were never directly diffed.
+//
+//	(a) tc26-Z 16-round path is differentially validated against gogost for the
+//	    first time (IMIT hardcodes CryptoPro-A, so that path was never covered).
+//	(b) The full 8-byte SeqMAC state is byte-compared across modules; IMIT
+//	    truncates to 4 bytes, so the upper 4 bytes were never directly diffed.
 //
 // Oracle note: GOST28147Cipher.SeqMACBlock (exports_gost.go:97) allocates a
 // fresh MAC per call (NewMAC → Write → Sum), so MAC.Sum destructiveness does
@@ -135,8 +136,8 @@ func TestDiff_SeqMACBlock(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xDEAD_BEEF))
 
 	sboxCases := []struct {
-		name     string
-		cleanSBox gost28147.SBox
+		name       string
+		cleanSBox  gost28147.SBox
 		oracleSBox *refgost.Sbox
 	}{
 		{"CryptoPro-A", gost28147.SboxCryptoProA, refgost.SboxCryptoProA},
@@ -145,9 +146,8 @@ func TestDiff_SeqMACBlock(t *testing.T) {
 
 	const iterations = 200
 	for _, sc := range sboxCases {
-		sc := sc
 		t.Run(sc.name, func(t *testing.T) {
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				key := make([]byte, keySize)
 				rng.Read(key)
 				block := make([]byte, 8) // gost28147.BlockSize

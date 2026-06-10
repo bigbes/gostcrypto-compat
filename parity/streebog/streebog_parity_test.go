@@ -17,7 +17,7 @@ func TestDiffAgainstGost(t *testing.T) {
 
 	// Include boundary lengths explicitly plus randomized ones.
 	lengths := []int{0, 1, 7, 31, 63, 64, 65, 127, 128, 129, 191, 192, 255, 256, 1000, 4096}
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		lengths = append(lengths, rng.Intn(2050))
 	}
 
@@ -152,7 +152,7 @@ func FuzzDiffAgainstGostMultiChunk(f *testing.F) {
 // oracle (clean-room streaming vs reference one-shot) for the 512-bit variant.
 func TestDiffStreamingAgainstGost(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xBEEF))
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		n := rng.Intn(3000)
 		msg := make([]byte, n)
 		rng.Read(msg)
@@ -160,10 +160,7 @@ func TestDiffStreamingAgainstGost(t *testing.T) {
 		h := streebog.New512()
 		for off := 0; off < n; {
 			chunk := rng.Intn(70) + 1
-			end := off + chunk
-			if end > n {
-				end = n
-			}
+			end := min(off+chunk, n)
 			h.Write(msg[off:end])
 			off = end
 		}
@@ -180,7 +177,7 @@ func TestDiffStreamingAgainstGost(t *testing.T) {
 // (all-0x01) and MSB_256 truncation under partial-buffer and multi-block state.
 func TestDiffStreaming256AgainstGost(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xCAFE))
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		n := rng.Intn(3000)
 		msg := make([]byte, n)
 		rng.Read(msg)
@@ -188,10 +185,7 @@ func TestDiffStreaming256AgainstGost(t *testing.T) {
 		h := streebog.New256()
 		for off := 0; off < n; {
 			chunk := rng.Intn(70) + 1
-			end := off + chunk
-			if end > n {
-				end = n
-			}
+			end := min(off+chunk, n)
 			h.Write(msg[off:end])
 			off = end
 		}
@@ -259,7 +253,7 @@ func TestSumNonDestructiveParity(t *testing.T) {
 // state), reset, hash msg2, diff result against oracle(msg2).
 func TestResetReuseParity(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xDEADBEEF))
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		n := rng.Intn(300)
 		msg1 := make([]byte, n)
 		rng.Read(msg1)

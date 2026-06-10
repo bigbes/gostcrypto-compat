@@ -27,7 +27,7 @@ func TestDiffAgainstInternalGost(t *testing.T) {
 	// Deterministic spread of lengths around block boundaries plus random
 	// lengths, all strictly > 0 (empty is the documented D1 divergence).
 	lengths := []int{1, 2, 7, 8, 15, 16, 31, 32, 33, 63, 64, 65, 100, 255, 256, 257, 1023, 1024, 2100}
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		lengths = append(lengths, 1+rng.Intn(4096))
 	}
 
@@ -106,7 +106,7 @@ func FuzzDiffAgainstInternalGost(f *testing.F) {
 // hash.Hash interface in odd chunk sizes and diffs against the oracle.
 func TestDiffStreaming(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x1234))
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		n := 1 + rng.Intn(2048)
 		msg := make([]byte, n)
 		rng.Read(msg)
@@ -114,10 +114,7 @@ func TestDiffStreaming(t *testing.T) {
 		h := New()
 		for off := 0; off < len(msg); {
 			chunk := 1 + rng.Intn(40)
-			end := off + chunk
-			if end > len(msg) {
-				end = len(msg)
-			}
+			end := min(off+chunk, len(msg))
 			h.Write(msg[off:end])
 			off = end
 		}
@@ -137,7 +134,7 @@ func TestDiffReset(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x4E5E7))
 	oracle := gost.NewGOSTR341194CryptoProHash() // gogost-backed hash.Hash
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		// First message — non-empty to stay outside the D1 divergence.
 		n1 := 1 + rng.Intn(512)
 		msg1 := make([]byte, n1)
@@ -182,7 +179,7 @@ func TestDiffReset(t *testing.T) {
 func TestSumNonDestructive(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xDEAD))
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		n := 1 + rng.Intn(2048)
 		msg := make([]byte, n)
 		rng.Read(msg)
@@ -229,7 +226,7 @@ func TestSumAppendPrefix(t *testing.T) {
 	rng := rand.New(rand.NewSource(0xBEEF))
 	prefix := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		n := 1 + rng.Intn(512)
 		msg := make([]byte, n)
 		rng.Read(msg)

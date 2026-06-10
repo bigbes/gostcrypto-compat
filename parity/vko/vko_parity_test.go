@@ -177,11 +177,11 @@ func TestDifferential(t *testing.T) {
 
 	type variant int
 	const (
-		v2001    variant = iota
-		v2012256          // default 512-paramSetA
-		v2012512          // default 512-paramSetA
-		v2012256cof4      // tc26-256-A, cofactor-4, small UKM (VKO-01)
-		v2012256cof4lgukm // tc26-256-A, cofactor-4, large UKM (VKO-05)
+		v2001             variant = iota
+		v2012256                  // default 512-paramSetA
+		v2012512                  // default 512-paramSetA
+		v2012256cof4              // tc26-256-A, cofactor-4, small UKM (VKO-01)
+		v2012256cof4lgukm         // tc26-256-A, cofactor-4, large UKM (VKO-05)
 	)
 
 	clean := func(v variant, prv, peer, ukm []byte) ([]byte, error) {
