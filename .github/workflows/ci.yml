@@ -30,3 +30,34 @@ jobs:
       - name: test (facade KAT/vector + clean-room↔gogost parity)
         working-directory: gostcrypto-compat
         run: go test ./...
+
+  # Builds the GOST reference engine from source and runs the suite against it,
+  # so the live-engine differential (parity/gost28147cnt's TestDiff_GostEngineCLI,
+  # which shells out to `openssl enc -engine gost`) actually executes instead of
+  # self-skipping. v3.0.3 is the vector source pinned in docs/engine-vectors.md.
+  gost-engine:
+    runs-on: ubuntu-latest
+    env:
+      GOST_ENGINE_REF: v3.0.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gostcrypto-compat
+      - uses: actions/checkout@v4
+        with:
+          repository: bigbes/gostcrypto
+          path: gostcrypto
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      # Clone + build + install gost-engine and assert the CLI path works.
+      # Shared with gostcrypto's parity workflow via this local composite action
+      # (both repos check out gostcrypto-compat as a sibling).
+      - uses: ./gostcrypto-compat/.github/actions/setup-gost-engine
+        with:
+          ref: ${{ env.GOST_ENGINE_REF }}
+
+      - name: test against the live gost-engine
+        working-directory: gostcrypto-compat
+        run: go test ./...
