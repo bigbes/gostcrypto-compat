@@ -11,6 +11,7 @@ import (
 
 	gost "github.com/bigbes/gostcrypto-compat"
 	"github.com/bigbes/gostcrypto/gost28147"
+	gogost28147 "go.stargrave.org/gogost/v7/gost28147"
 )
 
 // The gostcryptocompat.NewGOST28147_CNT oracle returns gogost's raw
@@ -115,16 +116,20 @@ func gostEngineConfCandidates() []string {
 	}
 }
 
-// engineCNT shells out to the gost-engine CLI to produce the ground-truth
+// isEngineAvailable returns (path, true) when the gost-engine CLI is
+// resolvable, (_, false) otherwise. Call this ONCE before a loop; use
+// mustEngineCNT inside the loop.
+func isEngineAvailable() (string, bool) {
+	return opensslBin()
+}
+
+// mustEngineCNT shells out to the gost-engine CLI to produce the ground-truth
 // keystream (XOR over zero) for the given key/iv. tc26 selects -gost89-cnt-12
-// (tc26-Z); otherwise -gost89-cnt (CryptoPro-A default). Returns ok=false if
-// the engine is unavailable so the caller can skip.
-func engineCNT(t *testing.T, key, iv []byte, n int, tc26 bool) (out []byte, ok bool) {
+// (tc26-Z); otherwise -gost89-cnt (CryptoPro-A default).
+// Precondition: the caller has already confirmed the engine is available via
+// isEngineAvailable; any CLI error here is a real failure → t.Fatalf.
+func mustEngineCNT(t *testing.T, bin string, key, iv []byte, n int, tc26 bool) []byte {
 	t.Helper()
-	bin, ok := opensslBin()
-	if !ok {
-		return nil, false
-	}
 	mode := "-gost89-cnt"
 	if tc26 {
 		mode = "-gost89-cnt-12"
@@ -138,10 +143,21 @@ func engineCNT(t *testing.T, key, iv []byte, n int, tc26 bool) (out []byte, ok b
 	}
 	res, err := cmd.Output()
 	if err != nil || len(res) < n {
-		t.Logf("engine CLI unavailable (%v); skipping", err)
+		t.Fatalf("gost-engine CLI failed (binary exists but command errored): %v", err)
+	}
+	return res[:n]
+}
+
+// engineCNT is kept for backward compatibility in tests that probe availability
+// inline. New tests should use isEngineAvailable + mustEngineCNT.
+// Returns ok=false only when the binary is genuinely not resolvable.
+func engineCNT(t *testing.T, key, iv []byte, n int, tc26 bool) (out []byte, ok bool) {
+	t.Helper()
+	bin, ok := opensslBin()
+	if !ok {
 		return nil, false
 	}
-	return res[:n], true
+	return mustEngineCNT(t, bin, key, iv, n, tc26), true
 }
 
 func hexstr(b []byte) string {
@@ -156,9 +172,20 @@ func hexstr(b []byte) string {
 
 // TestDiff_GostEngineCLI is the authoritative random differential: it diffs
 // the clean-room streaming impl against the gost-engine CLI ground truth over
-// random key/IV and random lengths (including >1024 to exercise meshing),
-// driving the clean-room side through random non-block-aligned chunk splits.
+// random key/IV and random lengths (including >1024 and >2048 to exercise
+// first and second CryptoPro meshing boundaries), driving the clean-room side
+// through random non-block-aligned chunk splits.
+//
+// G89C-01: availability is probed ONCE before the loop; any per-iteration CLI
+// failure is a real error (t.Fatalf), not a skip.
+// G89C-02: iter%7==0 generates n>=2049, exercising the second meshing boundary.
 func TestDiff_GostEngineCLI(t *testing.T) {
+	// G89C-01: probe availability once; skip the whole test if the binary is absent.
+	bin, ok := isEngineAvailable()
+	if !ok {
+		t.Skip("gost-engine CLI not available")
+	}
+
 	r := rand.New(rand.NewSource(0x6057C17))
 	for _, tc := range []struct {
 		name string
@@ -176,13 +203,15 @@ func TestDiff_GostEngineCLI(t *testing.T) {
 				r.Read(iv)
 				n := r.Intn(1300)
 				if iter%5 == 0 {
-					n = 1024 + r.Intn(48) // straddle meshing
+					n = 1024 + r.Intn(48) // straddle first meshing boundary
+				}
+				// G89C-02: straddle second meshing boundary (>=2048).
+				if iter%7 == 0 {
+					n = 2048 + r.Intn(100) // straddle second meshing boundary
 				}
 
-				want, ok := engineCNT(t, key, iv, n, tc.tc26)
-				if !ok {
-					t.Skip("gost-engine CLI not available")
-				}
+				// G89C-01: binary is confirmed available; any failure here is fatal.
+				want := mustEngineCNT(t, bin, key, iv, n, tc.tc26)
 
 				// Drive clean-room through random sub-block chunks.
 				s := NewCNT(gost28147.NewCipher(key, tc.sbox), iv)
@@ -206,49 +235,82 @@ func TestDiff_GostEngineCLI(t *testing.T) {
 	}
 }
 
-// TestDiff_InternalGostOracle keeps the requested gogost-oracle (CryptoPro-A)
-// differential. The oracle is the guide's blessed reference ONLY for the
-// pinned zero-key/zero-IV conformance vector: for non-zero IVs — and even for
-// zero IV with certain keys — gogost's CTR carry bug (guide D4) makes it
-// diverge from ground truth before 1024 bytes (this was observed and verified
-// against the engine: the clean-room impl matched the engine byte-for-byte
-// where the oracle did not). So this test pins the oracle on the zero/zero
-// vector across a range of split-call boundaries; the random differential
-// lives in TestDiff_GostEngineCLI against the engine ground truth instead.
+// TestDiff_InternalGostOracle keeps the requested gogost-oracle differential,
+// now for BOTH S-boxes (CryptoPro-A and tc26-Z). The oracle is the guide's
+// blessed reference ONLY for the pinned zero-key/zero-IV conformance vector:
+// for non-zero IVs — and even for zero IV with certain keys — gogost's CTR
+// carry bug (guide D4) makes it diverge from ground truth before 1024 bytes
+// (this was observed and verified against the engine: the clean-room impl
+// matched the engine byte-for-byte where the oracle did not). So this test
+// pins the oracle on the zero/zero vector across a range of split-call
+// boundaries; the random differential lives in TestDiff_GostEngineCLI against
+// the engine ground truth instead.
+//
+// G89C-03: tc26-Z sub-test added. The gogost oracle for tc26-Z is built
+// directly from gogost28147.NewCipher(key, &gogost28147.SboxIdtc26gost28147paramZ)
+// (bypassing the facade which hardcodes CryptoPro-A). Under zero-key/zero-IV
+// with n<1024 the counter never wraps within 128 blocks so the D4 carry
+// defect does not trigger, making this a valid oracle for tc26-Z in this
+// regime — same analysis as for CryptoPro-A.
 func TestDiff_InternalGostOracle(t *testing.T) {
 	key := make([]byte, gost28147.KeySize)
 	iv := make([]byte, gost28147.BlockSize)
-	sbox := gost28147.SboxCryptoProA
 	r := rand.New(rand.NewSource(0xC0FFEE))
 
-	for iter := 0; iter < 200; iter++ {
-		n := r.Intn(oracleMeshingFreeLimit) // < 1024: oracle meshing-free here
-		pt := make([]byte, n)
-		r.Read(pt)
-
-		ref, err := gost.NewGOST28147_CNT(key, iv)
-		if err != nil {
-			t.Fatalf("oracle ctor: %v", err)
-		}
-		want := make([]byte, n)
-		ref.XORKeyStream(want, pt) // ONE call only (D4)
-
-		// Drive clean-room through random non-block-aligned chunk splits.
-		s := NewCNT(gost28147.NewCipher(key, sbox), iv)
-		got := make([]byte, n)
-		off := 0
-		for off < n {
-			chunk := 1 + r.Intn(13)
-			if off+chunk > n {
-				chunk = n - off
-			}
-			s.XORKeyStream(got[off:off+chunk], pt[off:off+chunk])
-			off += chunk
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("iter=%d n=%d\n got=%x\nwant=%x", iter, n, got, want)
-		}
+	type sboxCase struct {
+		name     string
+		cleanBox gost28147.SBox
+		gogotBox *gogost28147.Sbox
 	}
+	cases := []sboxCase{
+		{
+			"CryptoPro-A",
+			gost28147.SboxCryptoProA,
+			gogost28147.SboxDefault, // SboxDefault == &SboxIdGost2814789CryptoProAParamSet
+		},
+		// G89C-03: tc26-Z always-on anchor via direct gogost oracle.
+		{
+			"tc26-Z",
+			gost28147.SboxTC26Z,
+			&gogost28147.SboxIdtc26gost28147paramZ,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			r2 := rand.New(rand.NewSource(0xC0FFEE)) // same seed per S-box for reproducibility
+			for iter := 0; iter < 200; iter++ {
+				n := r2.Intn(oracleMeshingFreeLimit) // < 1024: oracle meshing-free here
+				pt := make([]byte, n)
+				r2.Read(pt)
+
+				// Build the gogost oracle directly for this S-box.
+				gogostCipher := gogost28147.NewCipher(key, tc.gogotBox)
+				gogostCTR := gogostCipher.NewCTR(iv)
+				want := make([]byte, n)
+				gogostCTR.XORKeyStream(want, pt) // ONE call only (D4)
+
+				// Drive clean-room through random non-block-aligned chunk splits.
+				s := NewCNT(gost28147.NewCipher(key, tc.cleanBox), iv)
+				got := make([]byte, n)
+				off := 0
+				for off < n {
+					chunk := 1 + r.Intn(13)
+					if off+chunk > n {
+						chunk = n - off
+					}
+					s.XORKeyStream(got[off:off+chunk], pt[off:off+chunk])
+					off += chunk
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("sbox=%s iter=%d n=%d\n got=%x\nwant=%x",
+						tc.name, iter, n, got, want)
+				}
+			}
+		})
+	}
+
 }
 
 // FuzzDiff_InternalGostOracle mirrors TestDiff_InternalGostOracle: it feeds the
@@ -257,33 +319,50 @@ func TestDiff_InternalGostOracle(t *testing.T) {
 // chunk splits), asserting byte-equal output. As documented above, the gogost
 // oracle is only a valid reference for the zero-key/zero-IV, meshing-free
 // (n < 1024) regime, so the fuzzer holds key/IV at zero and caps the length;
-// only the plaintext and the chunk-split schedule vary.
+// only the plaintext, the chunk-split schedule, and the S-box selector vary.
+//
+// G89C-03: sboxSel parameter added — even selects CryptoPro-A, odd selects
+// tc26-Z. Each S-box is seeded explicitly so seed replay exercises both.
+// The gogost oracle is built directly (not via the facade) for tc26-Z.
 func FuzzDiff_InternalGostOracle(f *testing.F) {
-	f.Add([]byte("the quick brown fox"), uint8(7))
-	f.Add(make([]byte, 512), uint8(13))
-	f.Add(seedHex("00112233445566778899aabbccddeeff"), uint8(1))
+	// sboxSel: even=CryptoPro-A, odd=tc26-Z
+	f.Add([]byte("the quick brown fox"), uint8(7), uint8(0))               // CryptoPro-A
+	f.Add(make([]byte, 512), uint8(13), uint8(0))                          // CryptoPro-A
+	f.Add(seedHex("00112233445566778899aabbccddeeff"), uint8(1), uint8(0)) // CryptoPro-A
+	f.Add([]byte("the quick brown fox"), uint8(7), uint8(1))               // tc26-Z
+	f.Add(make([]byte, 512), uint8(13), uint8(1))                          // tc26-Z
+	f.Add(seedHex("00112233445566778899aabbccddeeff"), uint8(1), uint8(1)) // tc26-Z
 
-	f.Fuzz(func(t *testing.T, pt []byte, chunkSeed uint8) {
+	f.Fuzz(func(t *testing.T, pt []byte, chunkSeed uint8, sboxSel uint8) {
 		// Hold the oracle in its valid regime: zero key, zero IV, n < 1024.
 		key := make([]byte, gost28147.KeySize)
 		iv := make([]byte, gost28147.BlockSize)
-		sbox := gost28147.SboxCryptoProA
 
 		if len(pt) >= oracleMeshingFreeLimit {
 			pt = pt[:oracleMeshingFreeLimit-1]
 		}
 		n := len(pt)
 
-		ref, err := gost.NewGOST28147_CNT(key, iv)
-		if err != nil {
-			t.Fatalf("oracle ctor: %v", err)
+		// Select S-box pair: even=CryptoPro-A, odd=tc26-Z.
+		var cleanBox gost28147.SBox
+		var gogotBox *gogost28147.Sbox
+		if sboxSel%2 == 0 {
+			cleanBox = gost28147.SboxCryptoProA
+			gogotBox = gogost28147.SboxDefault
+		} else {
+			cleanBox = gost28147.SboxTC26Z
+			gogotBox = &gogost28147.SboxIdtc26gost28147paramZ
 		}
+
+		// Build gogost oracle directly for the selected S-box (the facade hardcodes
+		// CryptoPro-A and cannot be used for tc26-Z). ONE XORKeyStream call only (D4).
+		gogostCTR := gogost28147.NewCipher(key, gogotBox).NewCTR(iv)
 		want := make([]byte, n)
-		ref.XORKeyStream(want, pt) // ONE call only (D4)
+		gogostCTR.XORKeyStream(want, pt)
 
 		// Drive clean-room through a deterministic, fuzzer-seeded chunk split so
 		// the partial-block streaming path is exercised across boundaries.
-		s := NewCNT(gost28147.NewCipher(key, sbox), iv)
+		s := NewCNT(gost28147.NewCipher(key, cleanBox), iv)
 		got := make([]byte, n)
 		off := 0
 		step := chunkSeed
@@ -297,7 +376,7 @@ func FuzzDiff_InternalGostOracle(f *testing.F) {
 			step = step*31 + 7 // vary chunk sizes deterministically
 		}
 		if !bytes.Equal(got, want) {
-			t.Fatalf("n=%d\n got=%x\nwant=%x", n, got, want)
+			t.Fatalf("sbox=%d n=%d\n got=%x\nwant=%x", sboxSel%2, n, got, want)
 		}
 	})
 }
