@@ -116,11 +116,37 @@ func gostEngineConfCandidates() []string {
 	}
 }
 
-// isEngineAvailable returns (path, true) when the gost-engine CLI is
-// resolvable, (_, false) otherwise. Call this ONCE before a loop; use
-// mustEngineCNT inside the loop.
+// isEngineAvailable returns (path, true) only when the gost-engine CLI is both
+// resolvable AND actually loadable, (_, false) otherwise. Call this ONCE before
+// a loop; use mustEngineCNT inside the loop.
+//
+// Resolving the openssl binary is not enough: a box can ship openssl on PATH
+// (e.g. the stock ubuntu-latest runner used by the engine-free `parity` CI job)
+// without the gost engine installed, in which case `openssl enc -engine gost`
+// exits non-zero. Probing the binary alone would let that job march into the
+// per-iteration loop and t.Fatalf instead of skipping. So we exercise the
+// engine with one real block of encryption here; if it errors, report
+// unavailable and the caller skips. The dedicated `parity-engine` job, which
+// builds gost-engine from source, still passes this probe and runs the full
+// differential.
 func isEngineAvailable() (string, bool) {
-	return opensslBin()
+	bin, ok := opensslBin()
+	if !ok {
+		return "", false
+	}
+	// One block of zeros through the gost engine; success proves it loads.
+	cmd := exec.Command(bin, "enc", "-engine", "gost", "-gost89-cnt",
+		"-K", hexstr(make([]byte, gost28147.KeySize)),
+		"-iv", hexstr(make([]byte, gost28147.BlockSize)), "-nopad")
+	cmd.Stdin = bytes.NewReader(make([]byte, gost28147.BlockSize))
+	cmd.Env = os.Environ()
+	if conf := gostEngineConf(); conf != "" {
+		cmd.Env = append(cmd.Env, "OPENSSL_CONF="+conf)
+	}
+	if out, err := cmd.Output(); err != nil || len(out) < gost28147.BlockSize {
+		return "", false
+	}
+	return bin, true
 }
 
 // mustEngineCNT shells out to the gost-engine CLI to produce the ground-truth
